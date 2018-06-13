@@ -447,7 +447,8 @@ public:
 		return sav->callOrSetAsCallback(callback, userParam1, notMadeActive);
 	}
 	bool clearCallback(ThreadCallback* cb) {
-		return sav->clearCallback(cb);
+	    if (sav) return sav->clearCallback(cb);
+	    return true;
 	}
 
 	void cancel() {
