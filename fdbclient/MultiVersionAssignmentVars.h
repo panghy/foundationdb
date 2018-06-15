@@ -109,7 +109,9 @@ private:
 			future.getPtr()->addref(); // Cancel will delref our future, but we don't want to destroy it until this callback gets destroyed
 			future.getPtr()->cancel();
 
-			ThreadSingleAssignmentVar<T>::delref();
+			if(abortSignal.clearCallback(this)) {
+				ThreadSingleAssignmentVar<T>::delref();
+			}
 		}
 		else {
 			lock.leave();
