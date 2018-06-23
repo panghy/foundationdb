@@ -170,12 +170,12 @@ public:
 	}
 
 	virtual void cancel() {
-		if(addFutureRef()) {
-			api->futureCancel(f);
-			delFutureRef();
-		}
+//		if(addFutureRef()) {
+//			api->futureCancel(f);
+//			delFutureRef();
+//		}
 
-		// ThreadSingleAssignmentVar<T>::cancel();
+		ThreadSingleAssignmentVar<T>::cancel();
 	}
 
 	virtual void cleanupUnsafe() {
