@@ -175,7 +175,7 @@ public:
 			delFutureRef();
 		}
 
-		ThreadSingleAssignmentVar<T>::cancel();
+		// ThreadSingleAssignmentVar<T>::cancel();
 	}
 
 	virtual void cleanupUnsafe() {
