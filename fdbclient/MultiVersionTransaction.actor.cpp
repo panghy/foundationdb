@@ -311,7 +311,7 @@ void DLApi::init() {
 void DLApi::selectApiVersion(int apiVersion) {
 	// External clients must support at least this version
 	// Versions newer than what we understand are rejected in the C bindings
-	headerVersion = std::max(apiVersion, 400);
+	headerVersion = std::max(apiVersion, 300);
 
 	init();
 	throwIfError(api->selectApiVersion(apiVersion, headerVersion));
