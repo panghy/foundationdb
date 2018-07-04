@@ -283,7 +283,7 @@ public:
 
 	void reset();
 	void fullReset();
-	double getBackoff(int errCode);
+	double getBackoff();
 	void debugTransaction(UID dID) { info.debugID = dID; }
 
 	Future<Void> commitMutations();

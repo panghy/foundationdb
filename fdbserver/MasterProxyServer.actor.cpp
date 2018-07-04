@@ -58,7 +58,7 @@ struct ProxyStats {
 
 	Future<Void> logger;
 
-	explicit ProxyStats(UID id, Version* pVersion, NotifiedVersion* pCommittedVersion, int64_t *commitBatchesMemBytesCountPtr)
+	explicit ProxyStats(UID id, Version* pVersion, NotifiedVersion* pCommittedVersion)
 	  : cc("ProxyStats", id.toString()),
 		txnStartIn("txnStartIn", cc), txnStartOut("txnStartOut", cc), txnStartBatch("txnStartBatch", cc), txnSystemPriorityStartIn("txnSystemPriorityStartIn", cc), txnSystemPriorityStartOut("txnSystemPriorityStartOut", cc), txnBatchPriorityStartIn("txnBatchPriorityStartIn", cc), txnBatchPriorityStartOut("txnBatchPriorityStartOut", cc),
 		txnDefaultPriorityStartIn("txnDefaultPriorityStartIn", cc), txnDefaultPriorityStartOut("txnDefaultPriorityStartOut", cc), txnCommitIn("txnCommitIn", cc),	txnCommitVersionAssigned("txnCommitVersionAssigned", cc), txnCommitResolving("txnCommitResolving", cc), txnCommitResolved("txnCommitResolved", cc), txnCommitOut("txnCommitOut", cc),
@@ -67,7 +67,6 @@ struct ProxyStats {
 		specialCounter(cc, "lastAssignedCommitVersion", [this](){return this->lastCommitVersionAssigned;});
 		specialCounter(cc, "version", [pVersion](){return *pVersion; });
 		specialCounter(cc, "committedVersion", [pCommittedVersion](){ return pCommittedVersion->get(); });
-		specialCounter(cc, "commitBatchesMemBytesCount", [commitBatchesMemBytesCountPtr]() { return *commitBatchesMemBytesCountPtr; });
 		logger = traceCounters("ProxyMetrics", id, SERVER_KNOBS->WORKER_LOGGING_INTERVAL, &cc, "ProxyMetrics");
 	}
 };
@@ -168,7 +167,6 @@ DESCR struct SingleKeyMutation {
 
 struct ProxyCommitData {
 	UID dbgid;
-	int64_t commitBatchesMemBytesCount;
 	ProxyStats stats;
 	MasterInterface master;
 	vector<ResolverInterface> resolvers;
@@ -203,14 +201,13 @@ struct ProxyCommitData {
 	std::map<UID, Reference<StorageInfo>> storageCache;
 
 	ProxyCommitData(UID dbgid, MasterInterface master, RequestStream<GetReadVersionRequest> getConsistentReadVersion, Version recoveryTransactionVersion, RequestStream<CommitTransactionRequest> commit, Reference<AsyncVar<ServerDBInfo>> db, bool firstProxy)
-		: dbgid(dbgid), stats(dbgid, &version, &committedVersion, &commitBatchesMemBytesCount), master(master), 
+		: dbgid(dbgid), stats(dbgid, &version, &committedVersion), master(master), 
 			logAdapter(NULL), txnStateStore(NULL),
 			committedVersion(recoveryTransactionVersion), version(0), 
 			lastVersionTime(0), commitVersionRequestNumber(1), mostRecentProcessedRequestNumber(0),
 			getConsistentReadVersion(getConsistentReadVersion), commit(commit), lastCoalesceTime(0),
 			localCommitBatchesStarted(0), locked(false), firstProxy(firstProxy),
-			cx(openDBOnServer(db, TaskDefaultEndpoint, true, true)), singleKeyMutationEvent(LiteralStringRef("SingleKeyMutation")),
-			commitBatchesMemBytesCount(0)
+			cx(openDBOnServer(db, TaskDefaultEndpoint, true, true)), singleKeyMutationEvent(LiteralStringRef("SingleKeyMutation"))
 	{}
 };
 
@@ -298,8 +295,7 @@ struct ResolutionRequestBuilder {
 ACTOR Future<Void> commitBatch(
 	ProxyCommitData* self,
 	vector<CommitTransactionRequest> trs,
-	double *commitBatchTime,
-	int currentBatchMemBytesCount)
+	double *commitBatchTime)
 {
 	state int64_t localBatchNumber = ++self->localCommitBatchesStarted;
 	state LogPushData toCommit(self->logSystem);
@@ -308,9 +304,6 @@ ACTOR Future<Void> commitBatch(
 	state bool forceRecovery = false;
 
 	ASSERT(SERVER_KNOBS->MAX_READ_TRANSACTION_LIFE_VERSIONS <= SERVER_KNOBS->MAX_VERSIONS_IN_FLIGHT);  // since we are using just the former to limit the number of versions actually in flight!
-
-	// Active load balancing runs at a very high priority (to obtain accurate estimate of memory used by commit batches) so we need to downgrade here
-	Void _ = wait(delay(0, TaskProxyCommit));
 
 	self->lastVersionTime = t1;
 
@@ -832,8 +825,6 @@ ACTOR Future<Void> commitBatch(
 				target_latency * SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_INTERVAL_SMOOTHER_ALPHA + *commitBatchTime * (1-SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_INTERVAL_SMOOTHER_ALPHA)));
 
 
-	self->commitBatchesMemBytesCount -= currentBatchMemBytesCount;
-	ASSERT_ABORT(self->commitBatchesMemBytesCount >= 0);
 	return Void();
 }
 
@@ -1078,8 +1069,9 @@ ACTOR Future<Void> masterProxyServerCore(
 	state ProxyCommitData commitData(proxy.id(), master, proxy.getConsistentReadVersion, recoveryTransactionVersion, proxy.commit, db, firstProxy);
 
 	state Future<Sequence> sequenceFuture = (Sequence)0;
-	state PromiseStream< std::pair<vector<CommitTransactionRequest>, int> > batchedCommits;
+	state PromiseStream< vector<CommitTransactionRequest> > batchedCommits;
 	state Future<Void> commitBatcher;
+
 	state Future<Void> lastCommitComplete = Void();
 
 	state PromiseStream<Future<Void>> addActor;
@@ -1113,10 +1105,6 @@ ACTOR Future<Void> masterProxyServerCore(
 	commitData.logAdapter = new LogSystemDiskQueueAdapter(commitData.logSystem, txsTag, false);
 	commitData.txnStateStore = keyValueStoreLogSystem(commitData.logAdapter, proxy.id(), 2e9, true);
 	onError = onError || commitData.logSystem->onError();
-	// ((SERVER_MEM_LIMIT * COMMIT_BATCHES_MEM_FRACTION_OF_TOTAL) / COMMIT_BATCHES_MEM_TO_TOTAL_MEM_SCALE_FACTOR) is only a approximate formula for limiting the memory used.
-	// COMMIT_BATCHES_MEM_TO_TOTAL_MEM_SCALE_FACTOR is an estimate based on experiments and not an accurate one.
-	state int64_t commitBatchesMemoryLimit = std::min(SERVER_KNOBS->COMMIT_BATCHES_MEM_BYTES_HARD_LIMIT, static_cast<int64_t>((SERVER_KNOBS->SERVER_MEM_LIMIT * SERVER_KNOBS->COMMIT_BATCHES_MEM_FRACTION_OF_TOTAL) / SERVER_KNOBS->COMMIT_BATCHES_MEM_TO_TOTAL_MEM_SCALE_FACTOR));
-	TraceEvent(SevInfo, "CommitBatchesMemoryLimit").detail("bytesLimit", commitBatchesMemoryLimit);
 
 	addActor.send(transactionStarter(proxy, master, db, addActor, &commitData));
 	addActor.send(readRequestServer(proxy, &commitData));
@@ -1128,18 +1116,16 @@ ACTOR Future<Void> masterProxyServerCore(
 		(int)std::min<double>(SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_BYTES_MAX, 
 			std::max<double>(SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_BYTES_MIN, 
 				SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_BYTES_SCALE_BASE * pow(db->get().client.proxies.size(), SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_BYTES_SCALE_POWER)));
-	commitBatcher = batcher(batchedCommits, proxy.commit.getFuture(), SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_INTERVAL_FROM_IDLE, &commitBatchInterval, SERVER_KNOBS->MAX_COMMIT_BATCH_INTERVAL, SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_COUNT_MAX, commitBatchByteLimit, CLIENT_KNOBS->TRANSACTION_SIZE_LIMIT, commitData.commitBatchStartNotifications, &commitData.commitBatchesMemBytesCount, commitBatchesMemoryLimit, TaskProxyCommitBatcher, &commitData.stats.txnCommitIn);
+	commitBatcher = batcher(batchedCommits, proxy.commit.getFuture(), SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_INTERVAL_FROM_IDLE, &commitBatchInterval, SERVER_KNOBS->MAX_COMMIT_BATCH_INTERVAL, SERVER_KNOBS->COMMIT_TRANSACTION_BATCH_COUNT_MAX, commitBatchByteLimit, CLIENT_KNOBS->TRANSACTION_SIZE_LIMIT, commitData.commitBatchStartNotifications, TaskProxyCommitBatcher, &commitData.stats.txnCommitIn);
 	loop choose{
 		when(Void _ = wait(onError)) {}
-		when(std::pair<vector<CommitTransactionRequest>, int> batchedRequests = waitNext(batchedCommits.getFuture())) {
-			const vector<CommitTransactionRequest> &trs = batchedRequests.first;
-			int batchBytes = batchedRequests.second;
+		when(vector<CommitTransactionRequest> trs = waitNext(batchedCommits.getFuture())) {
 			//TraceEvent("MasterProxyCTR", proxy.id()).detail("CommitTransactions", trs.size()).detail("TransactionRate", transactionRate).detail("TransactionQueue", transactionQueue.size()).detail("ReleasedTransactionCount", transactionCount);
 			if (trs.size() || (db->get().recoveryState == RecoveryState::FULLY_RECOVERED && now() - lastCommit >= SERVER_KNOBS->MAX_COMMIT_BATCH_INTERVAL)) {
 				lastCommit = now();
 
 				if (trs.size() || lastCommitComplete.isReady()) {
-					lastCommitComplete = commitBatch(&commitData, trs, &commitBatchInterval, batchBytes);
+					lastCommitComplete = commitBatch(&commitData, trs, &commitBatchInterval);
 					addActor.send(lastCommitComplete);
 				}
 			}
