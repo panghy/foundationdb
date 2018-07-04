@@ -141,8 +141,7 @@ public:
 	int64_t transactionsTooOld;
 	int64_t transactionsFutureVersions;
 	int64_t transactionsNotCommitted;
-	int64_t transactionsMaybeCommitted;
-	int64_t transactionsResourceConstrained;
+	int64_t transactionsMaybeCommitted; 
 	ContinuousSample<double> latencies, readLatencies, commitLatencies, GRVLatencies, mutationsPerCommit, bytesPerCommit;
 
 	int outstandingWatches;
