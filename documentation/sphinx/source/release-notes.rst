@@ -2,6 +2,48 @@
 Release Notes
 #############
 
+5.2.8
+=====
+
+Bindings
+--------
+
+* Java: ``FDBDatabase::run`` and ``FDBDatabase::read`` now use the ``Executor`` provided for executing asynchronous callbacks instead of the default one for the database. `(Issue #640) <https://github.com/apple/foundationdb/issues/640>`_
+
+Fixes
+-----
+
+* A large number of concurrent read attempts could bring the database down after a cluster reboot. `(PR #650) <https://github.com/apple/foundationdb/pull/650>`_
+
+5.2.7
+=====
+
+Bindings
+--------
+
+* The go bindings now caches database connections on a per-cluster basis. `(Issue #607) <https://github.com/apple/foundationdb/issues/607>`_
+
+Fixes
+-----
+
+* A client could fail to connect to a cluster when the cluster was upgraded to a version compatible with the client. This affected upgrades that were using the multi-version client to maintain compatibility with both versions of the cluster. `(PR #637) <https://github.com/apple/foundationdb/pull/637>`_
+* Incorrect accounting of incompatible connections led to occasional assertion failures. `(PR #637) <https://github.com/apple/foundationdb/pull/637>`_
+
+5.2.6
+=====
+
+Features
+--------
+
+* Improved backup error specificity regarding timeouts and active connection failures. `(PR #581) <https://github.com/apple/foundationdb/pull/581>`_
+
+Fixes
+-----
+
+* A memory leak was fixed in connection closing. `(PR #574) <https://github.com/apple/foundationdb/pull/574>`_
+* A memory leak was fixed in the coordinator's handling of disconnected clients. `(PR #579) <https://github.com/apple/foundationdb/pull/579>`_
+* Aligned memory allocation on MacOS was sometimes failing to allocate memory, causing a crash. `(PR #547) <https://github.com/apple/foundationdb/pull/547>`_
+
 5.2.5
 =====
 
@@ -14,8 +56,8 @@ Features
 * Added the APPEND_IF_FITS atomic operation. `(PR #22) <https://github.com/apple/foundationdb/pull/22>`_
 * Updated the SET_VERSIONSTAMPED_KEY atomic operation to take four bytes to specify the offset instead of two (if the API version is set to 520 or higher). `(Issue #148) <https://github.com/apple/foundationdb/issues/148>`_
 * Updated the SET_VERSIONSTAMPED_VALUE atomic operation to place the versionstamp at a specified offset in a value (if the API version is set to 520 or higher). `(Issue #148) <https://github.com/apple/foundationdb/issues/148>`_
-* tls_verify_peers splits input using the '|' character. [5.2.4] `(PR #468) https://github.com/apple/foundationdb/pull/468`_
-* Added knobs and blob Backup URL parameters for operations/sec limits by operation type. [5.2.5] `(PR #513) https://github.com/apple/foundationdb/pull/513`_
+* tls_verify_peers splits input using the '|' character. [5.2.4] `(PR #468) <https://github.com/apple/foundationdb/pull/468>`_
+* Added knobs and blob Backup URL parameters for operations/sec limits by operation type. [5.2.5] `(PR #513) <https://github.com/apple/foundationdb/pull/513>`_
 
 Performance
 -----------
@@ -27,12 +69,12 @@ Fixes
 
 * The client did not clear the storage server interface cache on endpoint failure for all request types. This causes up to one second of additional latency on the first get range request to a rebooted storage server. `(Issue #351) <https://github.com/apple/foundationdb/issues/351>`_
 * Client input validation would handle inputs to versionstamp mutations incorrectly if the API version was less than 520. [5.2.1] `(Issue #387) <https://github.com/apple/foundationdb/issues/387>`_
-* Build would fail on recent versions of Clang. [5.2.2] `(PR #389) https://github.com/apple/foundationdb/pull/389/files`_
-* Clusters running with TLS plugin would reject clients using non-server certificates. [5.2.2] `(PR #396) https://github.com/apple/foundationdb/pull/396`_
-* Backup would attempt to clear too many ranges in a single transaction when erasing log ranges. [5.2.3] `(PR #440) https://github.com/apple/foundationdb/pull/440`_
-* A read-only transaction using the ``READ_LOCK_AWARE`` option would fail if committed. [5.2.3] `(PR #437) https://github.com/apple/foundationdb/pull/437`_
-* fdbcli kill command did not work when TLS was enabled. [5.2.4] `(PR #471) https://github.com/apple/foundationdb/pull/471`_
-* Don't disable certificate checks by default. [5.2.5] `(PR #511) https://github.com/apple/foundationdb/pull/511`_
+* Build would fail on recent versions of Clang. [5.2.2] `(PR #389) <https://github.com/apple/foundationdb/pull/389/files>`_
+* Clusters running with TLS plugin would reject clients using non-server certificates. [5.2.2] `(PR #396) <https://github.com/apple/foundationdb/pull/396>`_
+* Backup would attempt to clear too many ranges in a single transaction when erasing log ranges. [5.2.3] `(PR #440) <https://github.com/apple/foundationdb/pull/440>`_
+* A read-only transaction using the ``READ_LOCK_AWARE`` option would fail if committed. [5.2.3] `(PR #437) <https://github.com/apple/foundationdb/pull/437>`_
+* fdbcli kill command did not work when TLS was enabled. [5.2.4] `(PR #471) <https://github.com/apple/foundationdb/pull/471>`_
+* Don't disable certificate checks by default. [5.2.5] `(PR #511) <https://github.com/apple/foundationdb/pull/511>`_
 
 Status
 ------

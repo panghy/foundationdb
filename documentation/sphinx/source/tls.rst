@@ -20,9 +20,9 @@ Setting Up FoundationDB to use TLS
 Enabling TLS in a new cluster
 -----------------------------
 
-To set a new cluster to use TLS, use the ``-t`` flag on ``make-public.py``::
+To set a new cluster to use TLS, use the ``-t`` flag on ``make_public.py``::
 
-    user@host1$ sudo /usr/lib/foundationdb/make-public.py -t
+    user@host1$ sudo /usr/lib/foundationdb/make_public.py -t
     /etc/foundationdb/fdb.cluster is now using address 10.0.1.1 (TLS enabled)
 
 This will configure the new cluster to communicate with TLS.
@@ -101,7 +101,7 @@ The default behavior when the certificate or key file is not specified is to loo
 Default Peer Verification
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The default peer verification is ``Check.Valid=0``.
+The default peer verification is ``Check.Valid=1``.
 
 Default Password
 ^^^^^^^^^^^^^^^^^^^^^^^^^

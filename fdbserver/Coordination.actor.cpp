@@ -211,19 +211,31 @@ ACTOR Future<Void> leaderRegister(LeaderElectionRegInterface interf, Key key) {
 
 	loop choose {
 		when ( GetLeaderRequest req = waitNext( interf.getLeader.getFuture() ) ) {
-			if (currentNominee.present() && currentNominee.get().changeID != req.knownLeader)
+			if (currentNominee.present() && currentNominee.get().changeID != req.knownLeader) {
 				req.reply.send( currentNominee.get() );
-			else
+			} else {
 				notify.push_back( req.reply );
+				if(notify.size() > SERVER_KNOBS->MAX_NOTIFICATIONS) {
+					for(int i=0; i<notify.size(); i++)
+						notify[i].send( currentNominee.get() );
+					notify.clear();
+				}
+			}
 		}
 		when ( CandidacyRequest req = waitNext( interf.candidacy.getFuture() ) ) {
 			//TraceEvent("CandidacyRequest").detail("Nominee", req.myInfo.changeID );
 			availableCandidates.erase( LeaderInfo(req.prevChangeID) );
 			availableCandidates.insert( req.myInfo );
-			if (currentNominee.present() && currentNominee.get().changeID != req.knownLeader)
+			if (currentNominee.present() && currentNominee.get().changeID != req.knownLeader) {
 				req.reply.send( currentNominee.get() );
-			else
+			} else {
 				notify.push_back( req.reply );
+				if(notify.size() > SERVER_KNOBS->MAX_NOTIFICATIONS) {
+					for(int i=0; i<notify.size(); i++)
+						notify[i].send( currentNominee.get() );
+					notify.clear();
+				}
+			}
 		}
 		when (LeaderHeartbeatRequest req = waitNext( interf.leaderHeartbeat.getFuture() ) ) {
 			//TODO: use notify to only send a heartbeat once per interval
@@ -237,6 +249,7 @@ ACTOR Future<Void> leaderRegister(LeaderElectionRegInterface interf, Key key) {
 			newInfo.serializedInfo = req.conn.toString();
 			for(int i=0; i<notify.size(); i++)
 				notify[i].send( newInfo );
+			notify.clear();
 			req.reply.send( Void() );
 			return Void();
 		}
@@ -259,7 +272,17 @@ ACTOR Future<Void> leaderRegister(LeaderElectionRegInterface interf, Key key) {
 					nextNominee = Optional<LeaderInfo>();
 				}
 
-				if ( currentNominee.present() != nextNominee.present() || (currentNominee.present() && currentNominee.get().leaderChangeRequired(nextNominee.get())) || !availableLeaders.size() ) {
+				bool foundCurrentNominee = false;
+				if(currentNominee.present()) {
+					for(auto& it : availableLeaders) {
+						if(currentNominee.get().equalInternalId(it)) {
+							foundCurrentNominee = true;
+							break;
+						}
+					}
+				}
+
+				if ( currentNominee.present() != nextNominee.present() || (nextNominee.present() && !foundCurrentNominee) || (currentNominee.present() && currentNominee.get().leaderChangeRequired(nextNominee.get())) ) {
 					TraceEvent("NominatingLeader").detail("Nominee", nextNominee.present() ? nextNominee.get().changeID : UID())
 						.detail("Changed", nextNominee != currentNominee).detail("Key", printable(key));
 					for(int i=0; i<notify.size(); i++)
