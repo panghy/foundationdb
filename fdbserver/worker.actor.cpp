@@ -351,6 +351,11 @@ ACTOR Future<Void> storageServerRollbackRebooter( Future<Void> prevStorageServer
 
 		TraceEvent("StorageServerRequestedReboot", id);
 
+		// for memory servers, explicitly reboot the process if we are asked to rollback.
+		if (SERVER_KNOBS -> REBOOT_ON_MEMORY_STORE_ROLLBACK > 0 && storeType == KeyValueStoreType::MEMORY) {
+            flushAndExit(0);
+        }
+
 		//if (BUGGIFY) Void _ = wait(delay(1.0)); // This does the same thing as zombie()
 		// We need a new interface, since the new storageServer will do replaceInterface().  And we need to destroy
 		// the old one so the failure detector will know it is gone.
@@ -465,7 +470,7 @@ ACTOR Future<Void> monitorServerDBInfo( Reference<AsyncVar<Optional<ClusterContr
 
 		choose {
 			when( ServerDBInfo ni = wait( ccInterface->get().present() ? brokenPromiseToNever( ccInterface->get().get().getServerDBInfo.getReply( req ) ) : Never() ) ) {
-				TraceEvent("GotServerDBInfoChange").detail("ChangeID", ni.id).detail("MasterID", ni.master.id());
+				TraceEvent("GotServerDBInfoChange").detail("ChangeID", ni.id).detail("MasterID", ni.master.id()).detail("RecoveryState", ni.recoveryState);
 				ServerDBInfo localInfo = ni;
 				localInfo.myLocality = locality;
 				dbInfo->set(localInfo);
