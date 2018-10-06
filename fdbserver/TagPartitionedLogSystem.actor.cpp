@@ -700,9 +700,15 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 
 			bool delayingRollback = false;
 			ASSERT(logServers.size() == tLogReply.size());
-			if (!bTooManyFailures && pendingRollback < SERVER_KNOBS->TLOG_FAILURE_DETECTION_CYCLES) {
+			if (!bTooManyFailures && pendingRollback < SERVER_KNOBS->TLOG_FAILURE_DETECTION_CYCLES &&
+					unResponsiveSet.size() > 0) {
 				pendingRollback++;
 				delayingRollback = true;
+				TraceEvent("DelayingMasterRecovery", dbgid)
+					.detail("StatusCode", RecoveryStatus::locking_old_transaction_servers)
+					.detail("Status", RecoveryStatus::names[RecoveryStatus::locking_old_transaction_servers])
+					.detail("MissingIDs", missingServerIds)
+					.trackLatest("DelayingMasterRecovery");
 			} else if (!bTooManyFailures) {
 				pendingRollback = 0; // we are triggering a rollback.
 				std::sort( results.begin(), results.end(), sort_by_end() );
