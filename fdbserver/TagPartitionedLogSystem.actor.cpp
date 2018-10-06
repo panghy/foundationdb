@@ -705,7 +705,7 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 				int new_safe_range_begin = std::min(prevState.tLogWriteAntiQuorum, (int)(results.size()-1));
 				int safe_range_end = prevState.tLogReplicationFactor - absent;
 
-				Version end = results[ std::min(safe_range_end, (int)(results.size())) -1 ].end;
+				Version end = results[ std::min(safe_range_end, (int)(results.size())) -1 ];
 				Version knownCommittedVersion = end - (g_network->isSimulated() ? 10*SERVER_KNOBS->VERSIONS_PER_SECOND : SERVER_KNOBS->MAX_READ_TRANSACTION_LIFE_VERSIONS); //In simulation this must be the maximum MAX_READ_TRANSACTION_LIFE_VERSIONS
 				for(int i = 0; i < results.size(); i++) {
 					knownCommittedVersion = std::max(knownCommittedVersion, results[i].knownCommittedVersion);
