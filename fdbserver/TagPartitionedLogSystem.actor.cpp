@@ -637,6 +637,7 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 
 		state bool lastWaitForRecovery = true;
 		state int	cycles = 0;
+		state int	pendingRollback = 0;
 
 		loop {
 			if (buggify_lock_minimal_tlogs) {
@@ -697,8 +698,13 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 			// If too many TLogs are failed for recovery to be possible, we could wait forever here.
 			//Void _ = wait( smartQuorum( tLogReply, requiredCount, SERVER_KNOBS->RECOVERY_TLOG_SMART_QUORUM_DELAY ) || rejoins );
 
+			bool delayingRollback = false;
 			ASSERT(logServers.size() == tLogReply.size());
-			if (!bTooManyFailures) {
+			if (!bTooManyFailures && pendingRollback < SERVER_KNOBS->TLOG_FAILURE_DETECTION_CYCLES) {
+				pendingRollback++;
+				delayingRollback = true;
+			} else if (!bTooManyFailures) {
+				pendingRollback = 0; // we are triggering a rollback.
 				std::sort( results.begin(), results.end(), sort_by_end() );
 				int absent = logServers.size() - results.size();
 				int safe_range_begin = prevState.tLogWriteAntiQuorum;
@@ -785,21 +791,25 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 					.trackLatest("MasterRecoveryState");
 			}
 
-			// Wait for anything relevant to change
-			std::vector<Future<Void>> changes;
-			for(int i=0; i<logServers.size(); i++) {
-				if (tLogReply[i].isValid() && !tLogReply[i].isReady()) {
-					changes.push_back( ready(tLogReply[i]) );
-					if(buggify_lock_minimal_tlogs) {
-						changes.push_back( logFailed[i]->onChange() );
+			if (delayingRollback) {
+				Void _ = wait(delay(1));
+			} else {
+				// Wait for anything relevant to change
+				std::vector <Future<Void>> changes;
+				for (int i = 0; i < logServers.size(); i++) {
+					if (tLogReply[i].isValid() && !tLogReply[i].isReady()) {
+						changes.push_back(ready(tLogReply[i]));
+						if (buggify_lock_minimal_tlogs) {
+							changes.push_back(logFailed[i]->onChange());
+						}
+					} else {
+						changes.push_back(logFailed[i]->onChange());
+						changes.push_back(logServers[i]->onChange());
 					}
-				} else {
-					changes.push_back( logFailed[i]->onChange() );
-					changes.push_back( logServers[i]->onChange() );
 				}
+				ASSERT(changes.size());
+				Void _ = wait(waitForAny(changes));
 			}
-			ASSERT(changes.size());
-			Void _ = wait(waitForAny(changes));
 		}
 	}
 
