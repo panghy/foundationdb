@@ -110,14 +110,10 @@ ACTOR Future<Void> forwardError( PromiseStream<ErrorInfo> errors,
 	}
 }
 
-ACTOR Future<Void> handleIOErrors( Future<Void> actor, IKeyValueStore* store, UID id, Future<Void> onClosed = Void() ) {
+ACTOR Future<Void> handleIOErrors( Future<Void> actor, IClosable* store, UID id, Future<Void> onClosed = Void() ) {
 	choose {
 		when (state ErrorOr<Void> e = wait( errorOr(actor) )) {
-			if (store->getType() == KeyValueStoreType::MEMORY && SERVER_KNOBS->REUSE_MEMORY_STORE_ON_ROLLBACK) {
-				// do nothing.
-			} else {
-				Void _ = wait(onClosed);
-			}
+			Void _ = wait(onClosed);
 			if (e.isError()) throw e.getError(); else return e.get();
 		}
 		when (ErrorOr<Void> e = wait( actor.isReady() ? Never() : errorOr( store->getError() ) )) {
@@ -364,9 +360,8 @@ ACTOR Future<Void> storageServerRollbackRebooter( Future<Void> prevStorageServer
             ssi.initEndpoints();
 
             prevStorageServer = storageServer( store, ssi, db, folder, Promise<Void>() );
-			Future < Void > kvClosed = store->onClosed();
 			// need to setup handlers for IO errors
-			prevStorageServer = handleIOErrors(prevStorageServer, store, id, kvClosed);
+			prevStorageServer = handleIOErrors(prevStorageServer, store, id);
         } else {
             //if (BUGGIFY) Void _ = wait(delay(1.0)); // This does the same thing as zombie()
             // We need a new interface, since the new storageServer will do replaceInterface().  And we need to destroy
@@ -626,7 +621,11 @@ ACTOR Future<Void> workerServer( Reference<ClusterConnectionFile> connFile, Refe
 				Promise<Void> recovery;
 				Future<Void> f = storageServer( kv, recruited, dbInfo, folder, recovery );
 				recoveries.push_back(recovery.getFuture());
-				f =  handleIOErrors( f, kv, s.storeID, kvClosed );
+				if (kv->getType() == KeyValueStoreType::MEMORY && SERVER_KNOBS->REUSE_MEMORY_STORE_ON_ROLLBACK) {
+					f =  handleIOErrors( f, kv, s.storeID);
+				} else {
+					f =  handleIOErrors( f, kv, s.storeID, kvClosed);
+				}
 				f = storageServerRollbackRebooter( f, s.storeType, s.filename, recruited.id(), recruited.locality, dbInfo, folder, &filesClosed, memoryLimit, kv);
 				errorForwarders.add( forwardError( errors, "StorageServer", recruited.id(), f ) );
 			} else if( s.storedComponent == DiskStore::TLogData ) {
@@ -778,7 +777,11 @@ ACTOR Future<Void> workerServer( Reference<ClusterConnectionFile> connFile, Refe
 					ReplyPromise<StorageServerInterface> storageReady = req.reply;
 					storageCache.set( req.reqId, storageReady.getFuture() );
 					Future<Void> s = storageServer( data, recruited, req.seedTag, storageReady, dbInfo, folder );
-					s = handleIOErrors(s, data, recruited.id(), kvClosed);
+					if (data->getType() == KeyValueStoreType::MEMORY && SERVER_KNOBS->REUSE_MEMORY_STORE_ON_ROLLBACK) {
+						s = handleIOErrors(s, data, recruited.id());
+					} else {
+						s = handleIOErrors(s, data, recruited.id(), kvClosed);
+					}
 					s = storageCache.removeOnReady( req.reqId, s );
 					s = storageServerRollbackRebooter( s, req.storeType, filename, recruited.id(), recruited.locality, dbInfo, folder, &filesClosed, memoryLimit, data );
 					errorForwarders.add( forwardError( errors, "StorageServer", recruited.id(), s ) );
