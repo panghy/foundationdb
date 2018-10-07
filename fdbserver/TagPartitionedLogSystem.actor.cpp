@@ -702,12 +702,21 @@ struct TagPartitionedLogSystem : ILogSystem, ReferenceCounted<TagPartitionedLogS
 			ASSERT(logServers.size() == tLogReply.size());
 			if (!bTooManyFailures && pendingRollback < SERVER_KNOBS->TLOG_FAILURE_DETECTION_CYCLES &&
 					unResponsiveSet.size() > 0) {
+                std::sort( results.begin(), results.end(), sort_by_end() );
+                int new_safe_range_begin = std::min(prevState.tLogWriteAntiQuorum, (int)(results.size()-1));
+
+                Version end = results[ new_safe_range_begin ].end;
+                Version knownCommittedVersion = end - (g_network->isSimulated() ? 10*SERVER_KNOBS->VERSIONS_PER_SECOND : SERVER_KNOBS->MAX_READ_TRANSACTION_LIFE_VERSIONS); //In simulation this must be the maximum MAX_READ_TRANSACTION_LIFE_VERSIONS
+                for(int i = 0; i < results.size(); i++) {
+                    knownCommittedVersion = std::max(knownCommittedVersion, results[i].knownCommittedVersion);
+                }
 				pendingRollback++;
 				delayingRollback = true;
 				TraceEvent("DelayingMasterRecovery", dbgid)
 					.detail("StatusCode", RecoveryStatus::locking_old_transaction_servers)
 					.detail("Status", RecoveryStatus::names[RecoveryStatus::locking_old_transaction_servers])
 					.detail("MissingIDs", missingServerIds)
+					.detail("KnownCommittedVersion", knownCommittedVersion)
 					.trackLatest("DelayingMasterRecovery");
 			} else if (!bTooManyFailures) {
 				pendingRollback = 0; // we are triggering a rollback.

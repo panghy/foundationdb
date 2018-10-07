@@ -53,7 +53,7 @@ ServerKnobs::ServerKnobs(bool randomize, ClientKnobs* clientKnobs) {
 	init( PARALLEL_GET_MORE_REQUESTS,                             32 ); if( randomize && BUGGIFY ) PARALLEL_GET_MORE_REQUESTS = 2;
 	init( MAX_QUEUE_COMMIT_BYTES,                               15e6 ); if( randomize && BUGGIFY ) MAX_QUEUE_COMMIT_BYTES = 5000;
 	init( TLOG_FAILURE_DETECTION_CYCLES,                        30   );
-	init( REBOOT_ON_MEMORY_STORE_ROLLBACK,						1    );
+	init( REUSE_MEMORY_STORE_ON_ROLLBACK,						1    );
 
 	// Versions
 	init( MAX_VERSIONS_IN_FLIGHT,                          100000000 );
