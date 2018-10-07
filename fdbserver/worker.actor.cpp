@@ -110,10 +110,14 @@ ACTOR Future<Void> forwardError( PromiseStream<ErrorInfo> errors,
 	}
 }
 
-ACTOR Future<Void> handleIOErrors( Future<Void> actor, IClosable* store, UID id, Future<Void> onClosed = Void() ) {
+ACTOR Future<Void> handleIOErrors( Future<Void> actor, IKeyValueStore* store, UID id, Future<Void> onClosed = Void() ) {
 	choose {
 		when (state ErrorOr<Void> e = wait( errorOr(actor) )) {
-			Void _ = wait(onClosed);
+			if (store->getType() == KeyValueStoreType::MEMORY && SERVER_KNOBS->REUSE_MEMORY_STORE_ON_ROLLBACK) {
+				// do nothing.
+			} else {
+				Void _ = wait(onClosed);
+			}
 			if (e.isError()) throw e.getError(); else return e.get();
 		}
 		when (ErrorOr<Void> e = wait( actor.isReady() ? Never() : errorOr( store->getError() ) )) {
