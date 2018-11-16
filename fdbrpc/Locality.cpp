@@ -113,6 +113,8 @@ ProcessClass::Fitness ProcessClass::machineClassFitness( ClusterRole role ) cons
 			return ProcessClass::UnsetFit;
 		case ProcessClass::TesterClass:
 			return ProcessClass::NeverAssign;
+		case ProcessClass::NeverAssignClass:
+			return ProcessClass::NeverAssign;
 		default:
 			return ProcessClass::WorstFit;
 		}
