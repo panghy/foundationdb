@@ -258,24 +258,8 @@ public:
 		int result = -1;
 		KAIOLogEvent(logFile, id, OpLogEntry::TRUNCATE, OpLogEntry::START, size / 4096);
 		bool completed = false;
-		if( ctx.fallocateSupported && size >= lastFileSize ) {
-			result = fallocate( fd, 0, 0, size);
-			if (result != 0) {
-				int fallocateErrCode = errno;
-				TraceEvent("AsyncFileKAIOAllocateError").detail("fd",fd).detail("filename", filename).GetLastError();
-				if ( fallocateErrCode == EOPNOTSUPP ) {
-					// Mark fallocate as unsupported. Try again with truncate.
-					ctx.fallocateSupported = false;
-				} else {
-					KAIOLogEvent(logFile, id, OpLogEntry::TRUNCATE, OpLogEntry::COMPLETE, size / 4096, result);
-					return io_error();
-				}
-			} else {
-				completed = true;
-			}
-		}
-		if ( !completed )
-			result = ftruncate(fd, size);
+
+		result = ftruncate(fd, size);
 
 		KAIOLogEvent(logFile, id, OpLogEntry::TRUNCATE, OpLogEntry::COMPLETE, size / 4096, result);
 
