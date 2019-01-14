@@ -125,12 +125,12 @@ ACTOR Future<vector<UID>> addReadWriteDestinations(KeyRangeRef shard, vector<Sto
 
 	state vector< Future<Optional<UID>> > srcChecks;
 	for(int s=0; s<srcInterfs.size(); s++) {
-		srcChecks.push_back( checkReadWrite( srcInterfs[s].getShardState.getReplyUnlessFailedFor( GetShardStateRequest( shard, GetShardStateRequest::NO_WAIT), SERVER_KNOBS->SERVER_READY_QUORUM_INTERVAL, 0, TaskMoveKeys ), srcInterfs[s].id(), 0 ) );
+		srcChecks.push_back( checkReadWrite( srcInterfs[s].getShardState.getReplyUnlessFailedFor( GetShardStateRequest( shard, GetShardStateRequest::NO_WAIT), SERVER_KNOBS->SERVER_READY_QUORUM_INTERVAL, 0, TaskMoveKeys ), srcInterfs[s].id() ) );
 	}
 
 	state vector< Future<Optional<UID>> > destChecks;
 	for(int s=0; s<destInterfs.size(); s++) {
-		destChecks.push_back( checkReadWrite( destInterfs[s].getShardState.getReplyUnlessFailedFor( GetShardStateRequest( shard, GetShardStateRequest::NO_WAIT), SERVER_KNOBS->SERVER_READY_QUORUM_INTERVAL, 0, TaskMoveKeys ), destInterfs[s].id(), version ) );
+		destChecks.push_back( checkReadWrite( destInterfs[s].getShardState.getReplyUnlessFailedFor( GetShardStateRequest( shard, GetShardStateRequest::NO_WAIT), SERVER_KNOBS->SERVER_READY_QUORUM_INTERVAL, 0, TaskMoveKeys ), destInterfs[s].id() ) );
 	}
 
 	Void _ = wait( waitForAll(srcChecks) && waitForAll(destChecks) );
