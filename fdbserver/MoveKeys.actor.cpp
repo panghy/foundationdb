@@ -94,9 +94,9 @@ Future<Void> checkMoveKeysLockReadOnly( Transaction* tr, MoveKeysLock lock ) {
 	return checkMoveKeysLock(tr, lock, false);
 }
 
-ACTOR Future<Optional<UID>> checkReadWrite( Future< ErrorOr<std::pair<Version,Version>> > fReply, UID uid, Version version ) {
-	ErrorOr<std::pair<Version,Version>> reply = wait( fReply );
-	if (!reply.present() || reply.get().first < version)
+ACTOR Future<Optional<UID>> checkReadWrite( Future< ErrorOr<Version> > fReply, UID uid ) {
+	ErrorOr<Version> reply = wait( fReply );
+	if (!reply.present())
 		return Optional<UID>();
 	return Optional<UID>(uid);
 }
