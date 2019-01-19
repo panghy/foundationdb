@@ -82,6 +82,10 @@ struct IDataDistributionTeam {
 	std::string getDesc() {
 		const auto& servers = getLastKnownServerInterfaces();
 		std::string s = format("Size %d; ", servers.size());
+		s += format("Healthy: %d; ", isHealthy());
+		s += format("Priority: %d; ", getPriority());
+		s += format("Optimal: %d; ", isOptimal());
+		s += format("WrongConfiguration: %d; ", isWrongConfiguration());
 		for(int i=0; i<servers.size(); i++) {
 			if (i) s += ", ";
 			s += servers[i].address().toString() + " " + servers[i].id().shortString();
