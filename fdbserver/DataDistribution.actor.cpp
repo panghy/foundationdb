@@ -1138,11 +1138,11 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 		}
 	}
 
-	TraceEvent("TeamTrackerStarting", self->masterId).detail("Reason", "Initial wait complete (sc)").detail("Team", team->getDesc());
+	TraceEvent(SevWarn, "TeamTrackerStarting", self->masterId).detail("Reason", "Initial wait complete (sc)").detail("Team", team->getDesc());
 
 	try {
 		loop {
-			TraceEvent("TeamHealthChangeDetected", self->masterId).detail("isReady", self->initialFailureReactionDelay.isReady() );
+			TraceEvent(SevWarn, "TeamHealthChangeDetected", self->masterId).detail("isReady", self->initialFailureReactionDelay.isReady() );
 			// Check if the number of degraded machines has changed
 			state vector<Future<Void>> change;
 			auto servers = team->getServerIDs();
@@ -1171,7 +1171,7 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 			lastReady = self->initialFailureReactionDelay.isReady();
 
 			if( serversLeft != lastServersLeft || anyUndesired != lastAnyUndesired || anyWrongConfiguration != lastWrongConfiguration || wrongSize || recheck ) {
-				TraceEvent("TeamHealthChanged", self->masterId)
+				TraceEvent(SevWarn, "TeamHealthChanged", self->masterId)
 					.detail("Team", team->getDesc()).detail("serversLeft", serversLeft)
 					.detail("lastServersLeft", lastServersLeft).detail("ContainsUndesiredServer", anyUndesired)
 					.detail("HealthyTeamsCount", self->healthyTeamCount).detail("IsWrongConfiguration", anyWrongConfiguration);
@@ -1204,7 +1204,7 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 					if( lastOptimal )
 						self->optimalTeamCount += lastHealthy ? 1 : -1;
 
-					TraceEvent("TeamHealthDifference", self->masterId)
+					TraceEvent(SevWarn, "TeamHealthDifference", self->masterId)
 						.detail("LastOptimal", lastOptimal)
 						.detail("LastHealthy", lastHealthy)
 						.detail("Optimal", optimal)
@@ -1212,7 +1212,7 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 				}
 
 				if( lastOptimalCount != self->optimalTeamCount && ( self->optimalTeamCount == 0 || self->optimalTeamCount == 1 ) ) {
-					TraceEvent("OptimalTeamsChanging", self->masterId);
+					TraceEvent(SevWarn, "OptimalTeamsChanging", self->masterId);
 					self->optimalTeamChange.send( Void() );
 				}
 
@@ -1238,7 +1238,7 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 					team->setPriority( PRIORITY_TEAM_CONTAINS_UNDESIRED_SERVER );
 				else
 					team->setPriority( PRIORITY_TEAM_HEALTHY );
-				TraceEvent("TeamPriorityChange", self->masterId).detail("Priority", team->getPriority());
+				TraceEvent(SevWarn, "TeamPriorityChange", self->masterId).detail("Priority", team->getPriority());
 
 				if( self->initialFailureReactionDelay.isReady() ) {
 					vector<KeyRange> shards = self->shardsAffectedByTeamFailure->getShardsFor( team->getServerIDs() );
@@ -1273,22 +1273,20 @@ ACTOR Future<Void> teamTracker( DDTeamCollection *self, Reference<IDataDistribut
 							rs.priority = maxPriority;
 
 							self->output.send(rs);
-							if(g_random->random01() < 0.01) {
-								TraceEvent("SendRelocateToDDQx100", self->masterId)
+								TraceEvent(SevWarn, "SendRelocateToDDQ", self->masterId)
 									.detail("Team", team->getDesc())
 									.detail("KeyBegin", printable(rs.keys.begin))
 									.detail("KeyEnd", printable(rs.keys.end))
 									.detail("Priority", rs.priority)
 									.detail("TeamFailedMachines", team->getServerIDs().size()-serversLeft)
 									.detail("TeamOKMachines", serversLeft);
-							}
 						} else {
-							TraceEvent("RelocationNotSentToDDQ", self->masterId)
+							TraceEvent(SevWarn, "RelocationNotSentToDDQ", self->masterId)
 								.detail("Team", team->getDesc());
 						}
 					}
 				} else {
-					TraceEvent("TeamHealthNotReady", self->masterId);
+					TraceEvent(SevWarn, "TeamHealthNotReady", self->masterId);
 				}
 			}
 
