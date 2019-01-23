@@ -225,7 +225,7 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 	Void _ = wait( startMoveKeysLock->take( TaskDataDistributionLaunch ) );
 	state FlowLock::Releaser releaser( *startMoveKeysLock );
 
-	TraceEvent(SevDebug, interval.begin(), relocationIntervalId);
+	TraceEvent(interval.begin(), relocationIntervalId);
 
 	try {
 		state Key begin = keys.begin;
@@ -279,9 +279,9 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 					state Key endKey = old.end()[-1].key;
 					currentKeys = KeyRangeRef(currentKeys.begin, endKey);
 
-					/*TraceEvent("StartMoveKeysBatch", relocationIntervalId)
+					TraceEvent("StartMoveKeysBatch", relocationIntervalId)
 						.detail("KeyBegin", printable(currentKeys.begin).c_str())
-						.detail("KeyEnd", printable(currentKeys.end).c_str());*/
+						.detail("KeyEnd", printable(currentKeys.end).c_str());
 
 					//printf("Moving '%s'-'%s' (%d) to %d servers\n", keys.begin.toString().c_str(), keys.end.toString().c_str(), old.size(), servers.size());
 					//for(int i=0; i<old.size(); i++)
@@ -297,12 +297,12 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 						vector<UID> dest;
 						decodeKeyServersValue( old[i].value, src, dest );
 
-						/*TraceEvent("StartMoveKeysOldRange", relocationIntervalId)
+						TraceEvent("StartMoveKeysOldRange", relocationIntervalId)
 							.detail("KeyBegin", printable(rangeIntersectKeys.begin).c_str())
 							.detail("KeyEnd", printable(rangeIntersectKeys.end).c_str())
 							.detail("OldSrc", describe(src))
 							.detail("OldDest", describe(dest))
-							.detail("ReadVersion", tr.getReadVersion().get());*/
+							.detail("ReadVersion", tr.getReadVersion().get());
 
 						for(auto& uid : addAsSource[i]) {
 							src.push_back(uid);
@@ -317,8 +317,8 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 						//Track old destination servers.  They may be removed from serverKeys soon, since they are about to be overwritten in keyServers
 						for(auto s = dest.begin(); s != dest.end(); ++s) {
 							oldDests.insert(*s);
-							/*TraceEvent("StartMoveKeysOldDestAdd", relocationIntervalId)
-								.detail("Server", s->id());*/
+							TraceEvent("StartMoveKeysOldDestAdd", relocationIntervalId)
+								.detail("Server", *s);
 						}
 
 						//Keep track of src shards so that we can preserve their values when we overwrite serverKeys
@@ -327,8 +327,8 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 							sources.insert(*s);
 						for(auto s = sources.begin(); s != sources.end(); ++s) {
 							shardMap[*s].push_back(old.arena(), rangeIntersectKeys);
-							/*TraceEvent("StartMoveKeysShardMapAdd", relocationIntervalId)
-								.detail("Server", *s);*/
+							TraceEvent("StartMoveKeysShardMapAdd", relocationIntervalId)
+								.detail("Server", *s);
 						}
 					}
 
@@ -353,9 +353,9 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 
 					Void _ = wait( tr.commit() );
 
-					/*TraceEvent("StartMoveKeysCommitDone", relocationIntervalId)
+					TraceEvent("StartMoveKeysCommitDone", relocationIntervalId)
 						.detail("CommitVersion", tr.getCommittedVersion())
-						.detail("ShardsInBatch", old.size() - 1);*/
+						.detail("ShardsInBatch", old.size() - 1);
 					begin = endKey;
 					shards += old.size() - 1;
 					break;
@@ -365,13 +365,13 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 						throw;
 					Void _ = wait( tr.onError(e) );
 
-					if(retries%10 == 0) {
-						TraceEvent(retries == 50 ? SevWarnAlways : SevWarn, "startMoveKeysRetrying", relocationIntervalId)
+
+						TraceEvent(SevWarnAlways, "startMoveKeysRetrying", relocationIntervalId)
 							.detail("Keys", printable(keys))
 							.detail("BeginKey", printable(begin))
 							.detail("NumTries", retries)
 							.error(err);
-					}
+
 				}
 			}
 
@@ -381,12 +381,12 @@ ACTOR Future<Void> startMoveKeys( Database occ, KeyRange keys, vector<UID> serve
 		}
 
 		//printf("Committed moving '%s'-'%s' (version %lld)\n", keys.begin.toString().c_str(), keys.end.toString().c_str(), tr.getCommittedVersion());
-		TraceEvent(SevDebug, interval.end(), relocationIntervalId)
+		TraceEvent(interval.end(), relocationIntervalId)
 			.detail("Batches", batches)
 			.detail("Shards", shards)
 			.detail("MaxRetries", maxRetries);
 	} catch( Error& e ) {
-		TraceEvent(SevDebug, interval.end(), relocationIntervalId).error(e, true);
+		TraceEvent(interval.end(), relocationIntervalId).error(e, true);
 		throw;
 	}
 
@@ -470,7 +470,7 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 	ASSERT (!destinationTeam.empty());
 
 	try {
-		TraceEvent(SevDebug, interval.begin(), relocationIntervalId).detail("KeyBegin", printable(keys.begin)).detail("KeyEnd", printable(keys.end));
+		TraceEvent(interval.begin(), relocationIntervalId).detail("KeyBegin", printable(keys.begin)).detail("KeyEnd", printable(keys.end));
 
 		//This process can be split up into multiple transactions if there are too many existing overlapping shards
 		//In that case, each iteration of this loop will have begin set to the end of the last processed shard
@@ -587,7 +587,7 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 					}
 
 					waitInterval = TraceInterval("RelocateShard_FinishMoveKeys_WaitDurable");
-					TraceEvent(SevDebug, waitInterval.begin(), relocationIntervalId)
+					TraceEvent(waitInterval.begin(), relocationIntervalId)
 						.detail("KeyBegin", printable(keys.begin))
 						.detail("KeyEnd", printable(keys.end));
 
@@ -622,7 +622,7 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 						count += serverReady[s].isReady() && !serverReady[s].isError();
 
 					//printf("  fMK: moved data to %d/%d servers\n", count, serverReady.size());
-					TraceEvent(SevDebug, waitInterval.end(), relocationIntervalId).detail("ReadyServers", count);
+					TraceEvent(waitInterval.end(), relocationIntervalId).detail("ReadyServers", count);
 
 					if( count >= durableStorageQuorum ) {
 						// update keyServers, serverKeys
@@ -652,21 +652,19 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 					state Error err = error;
 					Void _ = wait( tr.onError(error) );
 					retries++;
-					if(retries%10 == 0) {
-						TraceEvent(retries == 20 ? SevWarnAlways : SevWarn, "RelocateShard_finishMoveKeysRetrying", relocationIntervalId)
+					    TraceEvent(SevWarnAlways, "RelocateShard_finishMoveKeysRetrying", relocationIntervalId)
 							.error(err)
 							.detail("KeyBegin", printable(keys.begin))
 							.detail("KeyEnd", printable(keys.end))
 							.detail("IterationBegin", printable(begin))
 							.detail("IterationEnd", printable(endKey));
-					}
 				}
 			}
 		}
 
-		TraceEvent(SevDebug, interval.end(), relocationIntervalId);
+		TraceEvent(interval.end(), relocationIntervalId);
 	} catch(Error &e) {
-		TraceEvent(SevDebug, interval.end(), relocationIntervalId).error(e, true);
+		TraceEvent(interval.end(), relocationIntervalId).error(e, true);
 		throw;
 	}
 	//printf("Moved keys: ( '%s'-'%s' )\n", keys.begin.toString().c_str(), keys.end.toString().c_str());
