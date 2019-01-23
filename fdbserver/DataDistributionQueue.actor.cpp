@@ -484,7 +484,7 @@ struct DDQueueData {
 	void completeSourceFetch( RelocateData results ) {
 		ASSERT( fetchingSourcesQueue.count( results ) );
 
-		//logRelocation( results, "GotSourceServers" );
+		logRelocation( results, "GotSourceServers" );
 
 		fetchingSourcesQueue.erase( results );
 		queueMap.insert( results.keys, results );
@@ -566,7 +566,7 @@ struct DDQueueData {
 			}
 
 			if( overlappingInFlight ) {
-				//logRelocation( rd, "SkippingOverlappingInFlight" );
+				logRelocation( rd, "SkippingOverlappingInFlight" );
 				continue;
 			}
 
@@ -583,11 +583,11 @@ struct DDQueueData {
 			// SOMEDAY: the list of source servers may be outdated since they were fetched when the work was put in the queue
 			// FIXME: we need spare capacity even when we're just going to be cancelling work via TEAM_HEALTHY
 			if( !canLaunch( rd, teamSize, busymap, cancellableRelocations ) ) {
-				//logRelocation( rd, "SkippingQueuedRelocation" );
+				logRelocation( rd, "SkippingQueuedRelocation" );
 				continue;
 			}
 
-			//logRelocation( rd, "LaunchingRelocation" );
+			logRelocation( rd, "LaunchingRelocation" );
 
 			//TraceEvent(rd.interval.end(), mi.id()).detail("Result","Success");
 			queuedRelocations--;
@@ -623,7 +623,7 @@ struct DDQueueData {
 				inFlightActors.insert( rrs.keys, dataDistributionRelocator( this, rrs ) );
 			}
 
-			//logRelocation( rd, "LaunchedRelocation" );
+			logRelocation( rd, "LaunchedRelocation" );
 		}
 		if( now() - startTime > .001 && g_random->random01()<0.001 )
 			TraceEvent(SevWarnAlways, "LaunchingQueueSlowx1000").detail("elapsed", now() - startTime );
@@ -968,7 +968,7 @@ ACTOR Future<Void> dataDistributionQueue(
 					self.activeRelocations--;
 					self.priority_relocations[ done.priority ]--;
 					self.fetchKeysComplete.erase( done );
-					//self.logRelocation( done, "ShardRelocatorDone" );
+					self.logRelocation( done, "ShardRelocatorDone" );
 					actors.add( tag( delay(0, TaskDataDistributionLaunch), done.keys, rangesComplete ) );
 					if( g_network->isSimulated() && debug_isCheckRelocationDuration() && now() - done.startTime > 60 ) {
 						TraceEvent(SevWarnAlways, "RelocationDurationTooLong").detail("Duration", now() - done.startTime);
