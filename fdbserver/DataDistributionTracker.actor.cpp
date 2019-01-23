@@ -494,11 +494,11 @@ ACTOR Future<Void> shardEvaluator(
 	else
 		wantsToMerge->clear();
 
-	/*TraceEvent("ShardEvaluator", self->masterId)
+	TraceEvent("ShardEvaluator", self->masterId)
 		.detail("TrackerId", trackerID)
 		.detail("ShouldSplit", shouldSplit)
 		.detail("ShouldMerge", shouldMerge)
-		.detail("HasBeenTrueLongEnough", wantsToMerge->hasBeenTrueForLongEnough());*/
+		.detail("HasBeenTrueLongEnough", wantsToMerge->hasBeenTrueForLongEnough());
 
 	if(wantsToMerge->hasBeenTrueForLongEnough()) {
 		onChange = onChange || shardMerger( self, trackerID, keys, shardSize );
