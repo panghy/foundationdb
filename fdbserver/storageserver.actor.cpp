@@ -1724,7 +1724,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 	try {
 		debugKeyRange("fetchKeysBegin", data->version.get(), shard->keys);
 
-		TraceEvent(SevDebug, interval.begin(), data->thisServerID)
+		TraceEvent(interval.begin(), data->thisServerID)
 			.detail("KeyBegin", printable(shard->keys.begin))
 			.detail("KeyEnd",printable(shard->keys.end));
 
@@ -1746,7 +1746,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 			Void _ = wait( data->durableVersion.whenAtLeast(lastAvailable+1) );
 		}
 
-		TraceEvent(SevDebug, "FetchKeysVersionSatisfied", data->thisServerID).detail("FKID", interval.pairID);
+		TraceEvent("FetchKeysVersionSatisfied", data->thisServerID).detail("FKID", interval.pairID);
 
 		Void _ = wait( data->fetchKeysParallelismLock.take( TaskDefaultYield, fetchBlockBytes ) );
 		state FlowLock::Releaser holdingFKPL( data->fetchKeysParallelismLock, fetchBlockBytes );
@@ -1756,7 +1756,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 		shard->phase = AddingShard::Fetching;
 		state Version fetchVersion = data->version.get();
 
-		TraceEvent(SevDebug, "FetchKeysUnblocked", data->thisServerID).detail("FKID", interval.pairID).detail("Version", fetchVersion);
+		TraceEvent("FetchKeysUnblocked", data->thisServerID).detail("FKID", interval.pairID).detail("Version", fetchVersion);
 
 		// Get the history
 		state int debug_getRangeRetries = 0;
@@ -1771,7 +1771,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 
 				int expectedSize = (int)this_block.expectedSize() + (8-(int)sizeof(KeyValueRef))*this_block.size();
 
-				TraceEvent(SevDebug, "FetchKeysBlock", data->thisServerID).detail("FKID", interval.pairID)
+				TraceEvent("FetchKeysBlock", data->thisServerID).detail("FKID", interval.pairID)
 					.detail("BlockRows", this_block.size()).detail("BlockBytes", expectedSize)
 					.detail("KeyBegin", printable(keys.begin)).detail("KeyEnd", printable(keys.end))
 					.detail("Last", this_block.size() ? printable(this_block.end()[-1].key) : std::string())
@@ -1859,21 +1859,21 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 		//  As we have finished this work, we will allow more work to start...
 		shard->fetchComplete.send(Void());
 
-		TraceEvent(SevDebug, "FKBeforeFinalCommit", data->thisServerID).detail("FKID", interval.pairID).detail("SV", data->storageVersion()).detail("DV", data->durableVersion.get());
+		TraceEvent("FKBeforeFinalCommit", data->thisServerID).detail("FKID", interval.pairID).detail("SV", data->storageVersion()).detail("DV", data->durableVersion.get());
 		// Directly commit()ing the IKVS would interfere with updateStorage, possibly resulting in an incomplete version being recovered.
 		// Instead we wait for the updateStorage loop to commit something (and consequently also what we have written)
 
 		Void _ = wait( data->durableVersion.whenAtLeast( data->storageVersion()+1 ) );
 		holdingFKPL.release();
 
-		TraceEvent(SevDebug, "FKAfterFinalCommit", data->thisServerID).detail("FKID", interval.pairID).detail("SV", data->storageVersion()).detail("DV", data->durableVersion.get());
+		TraceEvent("FKAfterFinalCommit", data->thisServerID).detail("FKID", interval.pairID).detail("SV", data->storageVersion()).detail("DV", data->durableVersion.get());
 
 		// Wait to run during update(), after a new batch of versions is received from the tlog but before eager reads take place.
 		Promise<FetchInjectionInfo*> p;
 		data->readyFetchKeys.push_back( p );
 
 		FetchInjectionInfo* batch = wait( p.getFuture() );
-		TraceEvent(SevDebug, "FKUpdateBatch", data->thisServerID).detail("FKID", interval.pairID);
+		TraceEvent("FKUpdateBatch", data->thisServerID).detail("FKID", interval.pairID);
 
 		shard->phase = AddingShard::Waiting;
 
@@ -1888,7 +1888,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 		ASSERT( shard->transferredVersion > data->storageVersion() );
 		ASSERT( shard->transferredVersion == data->data().getLatestVersion() );
 
-		TraceEvent(SevDebug, "FetchKeysHaveData", data->thisServerID).detail("FKID", interval.pairID)
+		TraceEvent("FetchKeysHaveData", data->thisServerID).detail("FKID", interval.pairID)
 			.detail("Version", shard->transferredVersion).detail("StorageVersion", data->storageVersion());
 		validate(data);
 
@@ -1930,9 +1930,9 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 
 		validate(data);
 
-		TraceEvent(SevDebug, interval.end(), data->thisServerID);
+		TraceEvent(interval.end(), data->thisServerID);
 	} catch (Error &e){
-		TraceEvent(SevDebug, interval.end(), data->thisServerID).error(e, true).detail("Version", data->version.get());
+		TraceEvent(interval.end(), data->thisServerID).error(e, true).detail("Version", data->version.get());
 
 		if (e.code() == error_code_actor_cancelled && !data->shuttingDown && shard->phase >= AddingShard::Fetching) {
 			if (shard->phase < AddingShard::Waiting) {
