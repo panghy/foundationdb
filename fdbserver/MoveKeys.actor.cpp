@@ -507,6 +507,7 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 					state std::set<UID> allServers;
 					state std::set<UID> intendedTeam(destinationTeam.begin(), destinationTeam.end());
 					state vector<UID> src;
+					vector<UID> completeSrc;
 
 					//Iterate through the beginning of keyServers until we find one that hasn't already been processed
 					int currentIndex;
@@ -514,12 +515,25 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 						decodeKeyServersValue( keyServers[currentIndex].value, src, dest );
 
 						std::set<UID> srcSet;
-						for(int s = 0; s < src.size(); s++)
+						for(int s = 0; s < src.size(); s++) {
 							srcSet.insert(src[s]);
+						}
+
+						if(currentIndex == 0) {
+							completeSrc = src;
+						} else {
+							for(int i = 0; i < completeSrc.size(); i++) {
+								if(!srcSet.count(completeSrc[i])) {
+									std::swap(completeSrc[i--], completeSrc.back());
+									completeSrc.pop_back();
+								}
+							}
+						}
 
 						std::set<UID> destSet;
-						for(int s = 0; s < dest.size(); s++)
+						for(int s = 0; s < dest.size(); s++) {
 							destSet.insert(dest[s]);
+						}
 
 						allServers.insert(srcSet.begin(), srcSet.end());
 						allServers.insert(destSet.begin(), destSet.end());
@@ -558,6 +572,13 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 						for(int s = 0; s < src2.size(); s++)
 							srcSet.insert(src2[s]);
 
+						for(int i = 0; i < completeSrc.size(); i++) {
+							if(!srcSet.count(completeSrc[i])) {
+								std::swap(completeSrc[i--], completeSrc.back());
+								completeSrc.pop_back();
+							}
+						}
+
 						allServers.insert(srcSet.begin(), srcSet.end());
 
 						alreadyMoved = dest2.empty() && srcSet == intendedTeam;
@@ -580,13 +601,7 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 						break;
 					}
 
-					if (dest.size() < durableStorageQuorum) {
-						TraceEvent(SevError,"FinishMoveKeysError", relocationIntervalId)
-							.detailf("Reason", "dest size too small (%d)", dest.size());
-						ASSERT(false);
-					}
-
-					waitInterval = TraceInterval("RelocateShard_FinishMoveKeys_WaitDurable");
+					waitInterval = TraceInterval("RelocateShard_FinishMoveKeysWaitDurable");
 					TraceEvent(waitInterval.begin(), relocationIntervalId)
 						.detail("KeyBegin", printable(keys.begin))
 						.detail("KeyEnd", printable(keys.end));
@@ -595,12 +610,19 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 					// They must also have at least the transaction read version so they can't "forget" the shard between
 					//   now and when this transaction commits.
 					state vector< Future<Void> > serverReady;	// only for count below
+					state vector<UID> newDestinations;
+					std::set<UID> completeSrcSet(completeSrc.begin(), completeSrc.end());
+					for(auto& it : dest) {
+						if(!completeSrcSet.count(it)) {
+							newDestinations.push_back(it);
+						}
+					}
 
 					// for smartQuorum
 					state vector<StorageServerInterface> storageServerInterfaces;
 					vector< Future< Optional<Value> > > serverListEntries;
-					for(int s=0; s<dest.size(); s++)
-						serverListEntries.push_back( tr.get( serverListKeyFor(dest[s]) ) );
+					for(int s=0; s<newDestinations.size(); s++)
+						serverListEntries.push_back( tr.get( serverListKeyFor(newDestinations[s]) ) );
 					state vector<Optional<Value>> serverListValues = wait( getAll(serverListEntries) );
 
 					releaser.release();
@@ -608,23 +630,21 @@ ACTOR Future<Void> finishMoveKeys( Database occ, KeyRange keys, vector<UID> dest
 					for(int s=0; s<serverListValues.size(); s++) {
 						ASSERT( serverListValues[s].present() );  // There should always be server list entries for servers in keyServers
 						auto si = decodeServerListValue(serverListValues[s].get());
-						ASSERT( si.id() == dest[s] );
+						ASSERT( si.id() == newDestinations[s] );
 						storageServerInterfaces.push_back( si );
 					}
 
 					for(int s=0; s<storageServerInterfaces.size(); s++)
 						serverReady.push_back( waitForShardReady( storageServerInterfaces[s], keys, tr.getReadVersion().get(), GetShardStateRequest::READABLE) );
-					Void _ = wait( timeout(
-						smartQuorum( serverReady, durableStorageQuorum, SERVER_KNOBS->SERVER_READY_QUORUM_INTERVAL, TaskMoveKeys ),
-						SERVER_KNOBS->SERVER_READY_QUORUM_TIMEOUT, Void(), TaskMoveKeys ) );
-					int count = 0;
+					Void _ = wait( timeout( waitForAll( serverReady ), SERVER_KNOBS->SERVER_READY_QUORUM_TIMEOUT, Void(), TaskMoveKeys ) );
+					int count = dest.size() - newDestinations.size();
 					for(int s=0; s<serverReady.size(); s++)
 						count += serverReady[s].isReady() && !serverReady[s].isError();
 
 					//printf("  fMK: moved data to %d/%d servers\n", count, serverReady.size());
 					TraceEvent(waitInterval.end(), relocationIntervalId).detail("ReadyServers", count);
 
-					if( count >= durableStorageQuorum ) {
+					if( count == dest.size() ) {
 						// update keyServers, serverKeys
 						// SOMEDAY: Doing these in parallel is safe because none of them overlap or touch (one per server)
 						Void _ = wait( krmSetRangeCoalescing( &tr, keyServersPrefix, currentKeys, keys, keyServersValue( dest ) ) );
