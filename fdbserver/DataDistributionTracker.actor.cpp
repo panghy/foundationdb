@@ -334,8 +334,7 @@ ACTOR Future<Void> shardSplitter(
 	//}
 	int numShards = splitKeys.size() - 1;
 
-	if( g_random->random01() < 0.01 ) {
-		TraceEvent("RelocateShardStartSplitx100", self->masterId)
+		TraceEvent("RelocateShardStartSplit", self->masterId)
 			.detail("Begin", printable(keys.begin))
 			.detail("End", printable(keys.end))
 			.detail("TrackerID", trackerId)
@@ -344,7 +343,6 @@ ACTOR Future<Void> shardSplitter(
 			.detail("Bandwidth", bandwidthStatus == BandwidthStatusHigh ? "High" : bandwidthStatus == BandwidthStatusNormal ? "Normal" : "Low")
 			.detail("BytesPerKSec", metrics.bytesPerKSecond)
 			.detail("numShards", numShards);
-	}
 
 	if( numShards > 1 ) {
 		int skipRange = g_random->randomInt(0, numShards);

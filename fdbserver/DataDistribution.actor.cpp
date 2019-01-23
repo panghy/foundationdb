@@ -1705,7 +1705,7 @@ ACTOR Future<Void> storageRecruiter( DDTeamCollection *self, Reference<AsyncVar<
 			for(auto s = self->server_info.begin(); s != self->server_info.end(); ++s) {
 				auto serverStatus = self->server_status.get( s->second->lastKnownInterface.id() );
 				if( serverStatus.excludeOnRecruit() ) {
-					TraceEvent(SevDebug, "DDRecruitExcl1").detail("Excluding", s->second->lastKnownInterface.address());
+					TraceEvent("DDRecruitExcl1").detail("Excluding", s->second->lastKnownInterface.address());
 					auto addr = s->second->lastKnownInterface.address();
 					exclusions.insert( AddressExclusion( addr.ip, addr.port ) );
 				}
@@ -1717,7 +1717,7 @@ ACTOR Future<Void> storageRecruiter( DDTeamCollection *self, Reference<AsyncVar<
 			auto excl = self->excludedServers.getKeys();
 			for(auto& s : excl)
 				if (self->excludedServers.get(s)) {
-					TraceEvent(SevDebug, "DDRecruitExcl2").detail("Excluding", s.toString());
+					TraceEvent("DDRecruitExcl2").detail("Excluding", s.toString());
 					exclusions.insert( s );
 				}
 			rsr.criticalRecruitment = self->healthyTeamCount == 0;
