@@ -272,17 +272,7 @@ ACTOR Future<Void> leaderRegister(LeaderElectionRegInterface interf, Key key) {
 					nextNominee = Optional<LeaderInfo>();
 				}
 
-				bool foundCurrentNominee = false;
-				if(currentNominee.present()) {
-					for(auto& it : availableLeaders) {
-						if(currentNominee.get().equalInternalId(it)) {
-							foundCurrentNominee = true;
-							break;
-						}
-					}
-				}
-
-				if ( currentNominee.present() != nextNominee.present() || (nextNominee.present() && !foundCurrentNominee) || (currentNominee.present() && currentNominee.get().leaderChangeRequired(nextNominee.get())) ) {
+				if ( currentNominee.present() != nextNominee.present() || (currentNominee.present() && currentNominee.get().leaderChangeRequired(nextNominee.get())) || !availableLeaders.size() ) {
 					TraceEvent("NominatingLeader").detail("Nominee", nextNominee.present() ? nextNominee.get().changeID : UID())
 						.detail("Changed", nextNominee != currentNominee).detail("Key", printable(key));
 					for(int i=0; i<notify.size(); i++)
