@@ -1775,6 +1775,7 @@ ACTOR Future<Void> fetchKeys( StorageServer *data, AddingShard* shard ) {
 					.detail("BlockRows", this_block.size()).detail("BlockBytes", expectedSize)
 					.detail("KeyBegin", printable(keys.begin)).detail("KeyEnd", printable(keys.end))
 					.detail("Last", this_block.size() ? printable(this_block.end()[-1].key) : std::string())
+					.detail("Nfk", this_block.readThrough.present() ? printable(this_block.readThrough.get()) : printable(keyAfter( this_block.end()[-1].key )))
 					.detail("Version", fetchVersion).detail("More", this_block.more);
 				debugKeyRange("fetchRange", fetchVersion, keys);
 				for(auto k = this_block.begin(); k != this_block.end(); ++k) debugMutation("fetch", fetchVersion, MutationRef(MutationRef::SetValue, k->key, k->value));
