@@ -303,6 +303,7 @@ public:
 
 	// Status
 	double STATUS_MIN_TIME_BETWEEN_REQUESTS;
+	double MAX_STATUS_REQUESTS_PER_SECOND;
 	int CONFIGURATION_ROWS_TO_FETCH;
 
 	// Timekeeper
