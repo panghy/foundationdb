@@ -1495,6 +1495,9 @@ ACTOR Future<Void> statusServer(FutureStream< StatusRequest> requests,
 	// Place to accumulate a batch of requests to respond to
 	state std::vector<StatusRequest> requests_batch;
 
+	// Last known status reply.
+	state StatusReply reply;
+
 	loop {
 		try {
 			// Wait til first request is ready
@@ -1546,13 +1549,22 @@ ACTOR Future<Void> statusServer(FutureStream< StatusRequest> requests,
 			// Update last_request_time now because GetStatus is finished and the delay is to be measured between requests
 			last_request_time = now();
 
-			while (!requests_batch.empty())
-			{
-				if (result.isError())
+			// If the response is an error, we'll send it back right away.
+			if (result.isError()) {
+				while (!requests_batch.empty())
+				{
 					requests_batch.back().reply.sendError(result.getError());
-				else
-					requests_batch.back().reply.send(result.get());
-				requests_batch.pop_back();
+					requests_batch.pop_back();
+				}
+			} else {
+				reply = result.get();
+				while (!requests_batch.empty())
+				{
+					// the response serialization can be quite costly
+					Void _ = wait(yield());
+					requests_batch.back().reply.send(reply);
+					requests_batch.pop_back();
+				}
 			}
 		}
 		catch (Error &e) {
