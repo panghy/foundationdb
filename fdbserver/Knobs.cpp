@@ -361,7 +361,7 @@ ServerKnobs::ServerKnobs(bool randomize, ClientKnobs* clientKnobs) {
 	BUGGIFY_ALL_COORDINATION =                                   false;   if( randomize && BUGGIFY ) { BUGGIFY_ALL_COORDINATION = true; TraceEvent("BuggifyAllCoordination"); }
 
 	// Status
-	init( STATUS_MIN_TIME_BETWEEN_REQUESTS,                      0.0 );
+	init( STATUS_MIN_TIME_BETWEEN_REQUESTS,                      0.1 );
 	init( MAX_STATUS_REQUESTS_PER_SECOND,                      256.0 );
 	init( CONFIGURATION_ROWS_TO_FETCH,                         20000 );
 
