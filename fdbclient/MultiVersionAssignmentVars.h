@@ -135,7 +135,7 @@ public:
 	~DLThreadSingleAssignmentVar() {
 		lock.assertNotEntered();
 		if(f) {
-			ASSERT_ABORT(futureRefCount == 1);
+			ASSERT(futureRefCount == 1);
 			api->futureDestroy(f);
 		}
 	}
@@ -170,10 +170,10 @@ public:
 	}
 
 	virtual void cancel() {
-//		if(addFutureRef()) {
-//			api->futureCancel(f);
-//			delFutureRef();
-//		}
+		if(addFutureRef()) {
+			api->futureCancel(f);
+			delFutureRef();
+		}
 
 		ThreadSingleAssignmentVar<T>::cancel();
 	}
